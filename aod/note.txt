@@ -1,0 +1,8 @@
+NOTE
+
+1. There must background for all time of the day, for example
+    - 1.jpg     (taken at morning)
+    - 2.jpg     (taken at afternoon)
+    - 3.jpg     (taken at evening)
+
+    - Other     (has background image for each minute like 60 min x 24 hour = 1440 background pictures)
