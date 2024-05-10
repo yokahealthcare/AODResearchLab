@@ -1,8 +1,12 @@
 import cv2
 import numpy as np
+import torch
+import torch.nn as nn
 
 from .object_tracker import ObjectTracker
 
+# Device agnostic code
+device = torch.device("cuda:0" if torch.cuda.is_available() else "")
 
 class AodDetectorOpencv:
     def __init__(self, opencv_algorithm, learning_rate, abandoned_threshold_frame=500):
@@ -17,7 +21,7 @@ class AodDetectorOpencv:
         self.n_frames = 0
 
         # Class settings
-        self.light_change_pixel_threshold = 150  # median mask value threshold (value between 0 - 255)
+        self.light_change_pixel_threshold = 100  # median mask value threshold (value between 0 - 255)
         self.light_change_occurrence_count = 0  # Error evader on bias (flash on mask frame) of KNN Subtract Class
         self.light_change_occur = False
         self.light_change_cooldown_period = None
@@ -25,6 +29,25 @@ class AodDetectorOpencv:
     @staticmethod
     def calculate_countours(threshold):
         return cv2.findContours(threshold, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    @staticmethod
+    def calculate_average_pooling(mask, number_of_pool=10):
+        # Convert mask to PyTorch tensor
+        mask = torch.from_numpy(mask).float().to(device)
+
+        # Add channel dimension if necessary (assuming grayscale input)
+        if len(mask.shape) == 2:
+            mask = mask.unsqueeze(0)  # Add channel dimension
+
+        pool_size = int(mask.size(2) // number_of_pool)
+
+        # Define average pooling layer
+        pool = nn.AvgPool2d(kernel_size=pool_size, stride=pool_size).to(device)
+
+        # Convert output back to NumPy array and squeeze channel dimension if needed
+        output = pool(mask).squeeze().detach().cpu().numpy()
+
+        return output
 
     def detect(self, frame):
         self.n_frames += 1
@@ -43,13 +66,15 @@ class AodDetectorOpencv:
 
         # Skip 500 frame at first (let the camera initialize)
         if self.n_frames > 500:
-            median = np.median(self.mask)
+            average_pooling = self.calculate_average_pooling(self.mask)
+            median = np.mean(average_pooling)
+            print(f"MEDIAN : {median}")
             if median > self.light_change_pixel_threshold:
                 self.light_change_occurrence_count += 1
 
                 # Executed at the exact moment the light changes (only once)
-                if not self.light_change_occur and self.light_change_occurrence_count > 50:
-                    self.light_change_cooldown_period = self.n_frames + 100  # Setting up cooldown period (100 frames)
+                if not self.light_change_occur and self.light_change_occurrence_count > 50:     # Wait for 50 frames then update
+                    self.light_change_cooldown_period = self.n_frames + 20  # Setting up cooldown period (20 frames)
                     self.light_change_occurrence_count = 0
 
             if self.light_change_cooldown_period is not None:
@@ -59,9 +84,9 @@ class AodDetectorOpencv:
                 else:
                     # Reset to normal setting
                     self.lr = self.desired_lr
-                    self.light_change_pixel_threshold = False
-                    self.light_change_cooldown_period = None
+                    self.light_change_occur = False
 
+        print(f"learning rate : {self.lr}")
         self.contours, hierarchy = self.calculate_countours(self.mask)
         boxes_xyxy = []
         for contour in self.contours:

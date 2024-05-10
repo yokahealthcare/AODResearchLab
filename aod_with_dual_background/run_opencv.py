@@ -8,7 +8,7 @@ from aod_detector import AodDetectorOpencv
 device = torch.device("cuda:0" if torch.cuda.is_available() else "")
 
 if __name__ == '__main__':
-    cap = cv2.VideoCapture("sample/video/video2.avi")
+    cap = cv2.VideoCapture("sample/video/video8.avi")
     yolo = YoloDetector("yolo/model/yolov8n.pt")
 
     # List all available opencv algorithm for background subtraction
