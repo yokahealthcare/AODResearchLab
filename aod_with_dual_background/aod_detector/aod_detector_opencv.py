@@ -67,9 +67,8 @@ class AodDetectorOpencv:
         # Skip 500 frame at first (let the camera initialize)
         if self.n_frames > 500:
             average_pooling = self.calculate_average_pooling(self.mask)
-            median = np.mean(average_pooling)
-            print(f"MEDIAN : {median}")
-            if median > self.light_change_pixel_threshold:
+            mean = np.mean(average_pooling)
+            if mean > self.light_change_pixel_threshold:
                 self.light_change_occurrence_count += 1
 
                 # Executed at the exact moment the light changes (only once)
