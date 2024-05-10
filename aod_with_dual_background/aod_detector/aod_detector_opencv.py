@@ -85,7 +85,6 @@ class AodDetectorOpencv:
                     self.lr = self.desired_lr
                     self.light_change_occur = False
 
-        print(f"learning rate : {self.lr}")
         self.contours, hierarchy = self.calculate_countours(self.mask)
         boxes_xyxy = []
         for contour in self.contours:
