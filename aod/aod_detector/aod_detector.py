@@ -13,7 +13,7 @@ class ObjectTracker:
         self.id_count = 0
 
         self.abandoned_temp = {}
-        self.abandoned_threshold_frame = 500       # Define how long the system decide if the object abandoned or not
+        self.abandoned_threshold_frame = 500  # Define how long the system decide if the object abandoned or not
 
     def update(self, objects_rect):
         # Objects boxes and ids
@@ -87,12 +87,18 @@ class AodDetector:
 
         self.frame_difference = None
         self.edged = None
-        self.threshold = None
-        self.contour = None
+        self.morph = None
+        self.contours = None
+
+        self.threshold_difference = 0.2
 
     @staticmethod
     def calculate_difference(frame1, frame2):
         return cv2.absdiff(frame1, frame2)
+
+    @staticmethod
+    def calculate_difference_average(difference, frame_width, frame_height):
+        return np.sum(difference) / (frame_width * frame_height)
 
     @staticmethod
     def calculate_canny_edge(frame_difference):
@@ -109,15 +115,21 @@ class AodDetector:
 
     # Main
     def detect(self, frame):
-        h, w = frame.shape[:2]
+        height, width = frame.shape[:2]
 
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame_blur = cv2.GaussianBlur(frame_gray, (3, 3), 0)
+        frame_blur = cv2.GaussianBlur(frame_gray, (3, 3), 0).astype(np.uint8)
 
         self.frame_difference = self.calculate_difference(self.first_frame_blur, frame_blur)
+
+        # Decrease the amount of threshold_difference to self.frame_difference
+        # For example, if set to 0.2, then the frame_difference value will be decreased by 20% from its orginal value
+        factor = 1 - self.threshold_difference
+        self.frame_difference = np.clip(self.frame_difference * factor, 0, 255).astype(np.uint8)
+
         self.edged = self.calculate_canny_edge(self.frame_difference)
-        self.threshold = self.calculate_morphology_ex(self.edged)
-        self.contours, hierarchy = self.calculate_countours(self.threshold)
+        self.morph = self.calculate_morphology_ex(self.edged)
+        self.contours, hierarchy = self.calculate_countours(self.morph)
 
         boxes_xyxy = []
         for contour in self.contours:
@@ -132,14 +144,16 @@ class AodDetector:
                 boxes_xyxy.append((x1, y1, x2, y2))
 
         _, abandoned_objects = tracker.update(boxes_xyxy)
-
         return abandoned_objects
 
     # Getter & Setter
     def set_first_frame(self, frame):
         self.first_frame = frame
         self.first_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        self.first_frame_blur = cv2.GaussianBlur(self.first_frame_gray, (3, 3), 0)
+        self.first_frame_blur = cv2.GaussianBlur(self.first_frame_gray, (3, 3), 0).astype(np.uint8)
 
     def get_variables(self):
-        return self.first_frame_blur, self.frame_difference, self.edged, self.threshold
+        return self.first_frame_blur, self.frame_difference, self.edged, self.morph
+
+    def set_threshold_difference(self, new_threshold):
+        self.threshold_difference = new_threshold

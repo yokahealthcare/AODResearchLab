@@ -1,12 +1,32 @@
+import os
+import time
+
 import cv2
 
-from yolo.yolo_detector import YoloDetector
 from aod_detector.aod_detector import AodDetector
+from yolo.yolo_detector import YoloDetector
+
+
+def get_hour_minute_second(elapsed_time):
+    minute, second = divmod(elapsed_time, 60)
+    hour, minute = divmod(minute, 60)
+
+    hour, minute, second = str(hour).zfill(2), str(minute).zfill(2), str(second).zfill(2)
+    return hour, minute, second
+
 
 if __name__ == '__main__':
+    FOLDER_PATH = "sample"
+    FILENAME = "video9"
+
+    cap = cv2.VideoCapture(f"{FOLDER_PATH}/video/{FILENAME}.avi")
     yolo = YoloDetector("yolo/model/yolov8n.pt")
     aod = AodDetector()
-    cap = cv2.VideoCapture("sample/video/stable_light_scenario.avi")
+
+    # Load the backgrounds image from folder
+    backgrounds = os.listdir(f"{FOLDER_PATH}/background/{FILENAME}")
+    backgrounds = [i.split(".")[0] for i in backgrounds]  # Take out the extension
+    backgrounds.sort()
 
     """
         Setting up first frame
@@ -16,14 +36,16 @@ if __name__ == '__main__':
     # aod.set_first_frame(frame)
 
     # Option 2: You can individual initialize with imread()
-    frame = cv2.imread("sample/background/stable_light_scenario.png")
+    frame = cv2.imread(f"{FOLDER_PATH}/background/{FILENAME}/{backgrounds[0]}.png")
     aod.set_first_frame(frame)
 
+    elapsed = 0
+    start = time.time()
     while True:
+        return_value = []
         has_frame, frame = cap.read()
         if not has_frame:
             break
-        return_value = []
 
         # Detect abandoned objects
         abandoned_objects = aod.detect(frame)
@@ -47,7 +69,7 @@ if __name__ == '__main__':
             if len(class_idx) == 0:
                 _class = "Unknown"
             else:
-                _class = yolo.model.names[class_idx[0]]     # We choose the first index only for class
+                _class = yolo.model.names[class_idx[0]]  # We choose the first index only for class
 
             result_dict = {
                 "region": {
@@ -61,8 +83,21 @@ if __name__ == '__main__':
             }
             return_value.append(result_dict)
 
-        print(return_value)         # See the result
+        end = time.time()
+        if end - start > 1:
+            elapsed += 1
+            hour, minute, second = get_hour_minute_second(elapsed)
+            current_duration = f"{hour}:{minute}:{second}"
+
+            if current_duration in backgrounds:
+                print("Changing background")
+                index = backgrounds.index(current_duration)
+                frame = cv2.imread(f"{FOLDER_PATH}/background/{FILENAME}/{backgrounds[index]}.png")
+                aod.set_first_frame(frame)
+
+            print(f"Current Duration : {current_duration}")
+            start = end
 
         cv2.imshow("Original", frame)
-        if cv2.waitKey(20) & 0xFF == ord("q"):
+        if cv2.waitKey(25) & 0xFF == ord("q"):
             break
